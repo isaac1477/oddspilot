@@ -60,6 +60,7 @@ function mkMarket(
     price: o.probability,
     volume24h: o.volume24h,
   }));
+  const totalVol24h = outcomes.reduce((sum, o) => sum + o.volume24h, 0);
   return {
     id,
     slug,
@@ -69,11 +70,14 @@ function mkMarket(
     endsAt,
     liquidity,
     totalVolume,
+    volume24h: totalVol24h,
     outcomes: outcomeData,
     oddsHistory: genOddsHistory(outcomes[0].probability, 40, vol),
     recentActivity: genActivity(outcomes.map(o => o.label), 12),
     description,
     resolutionSource: 'Resolves via UMA optimistic oracle on Solana. Resolution criteria published on-chain.',
+    source: 'demo' as const,
+    lastUpdated: now,
   };
 }
 
@@ -255,8 +259,7 @@ export const sampleMarkets: Market[] = [
   ),
 ];
 
-export const categories: ('All' | MarketCategory)[] = [
-  'All',
+export const demoCategories: string[] = [
   'Politics',
   'Crypto',
   'Sports',

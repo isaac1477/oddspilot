@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { ArrowLeft, Clock, Droplets, BarChart3, Info, GitCompare, Activity } from 'lucide-react';
-import type { Market, MarketOutcome } from '@/types';
+import { ArrowLeft, Clock, Droplets, BarChart3, Info, GitCompare, Activity, Layers } from 'lucide-react';
+import type { Market, MarketOutcome, OrderBookData } from '@/types';
 import { portfolioStore } from '@/services/portfolioStore';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { OddsChart } from '@/components/ui/OddsChart';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { SourceBadge } from '@/components/ui/SourceBadge';
 import { marketDataService } from '@/services/marketDataService';
 import {
   formatCurrency,
@@ -226,6 +227,8 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
   const [market, setMarket] = useState<Market | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [orderBook, setOrderBook] = useState<OrderBookData | null>(null);
+  const [orderBookLoading, setOrderBookLoading] = useState(false);
 
   const fetchMarket = async () => {
     setLoading(true);
@@ -245,6 +248,17 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
   };
 
   useEffect(() => { fetchMarket(); }, [marketId]);
+
+  useEffect(() => {
+    if (!market || market.source !== 'polymarket') return;
+    const tokenId = market.outcomes[0]?.clobTokenId;
+    if (!tokenId) return;
+    setOrderBookLoading(true);
+    marketDataService.getOrderBook(tokenId).then(ob => {
+      setOrderBook(ob);
+      setOrderBookLoading(false);
+    }).catch(() => setOrderBookLoading(false));
+  }, [market]);
 
   const change = useMemo(() => {
     if (!market || market.oddsHistory.length < 2) return 0;
@@ -303,6 +317,9 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
           </span>
         </div>
         <h1 className="text-xl font-semibold text-gray-50 leading-tight break-words">{market.question}</h1>
+        <div>
+          <SourceBadge source={market.source} lastUpdated={market.lastUpdated} />
+        </div>
       </div>
 
       {/* Odds summary */}
@@ -318,7 +335,13 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
             {probChangeArrow(change)} {Math.abs(change * 100).toFixed(1)}%
           </div>
         </div>
-        <OddsChart data={market.oddsHistory} height={160} color="auto" />
+        {market.oddsHistory.length >= 2 ? (
+          <OddsChart data={market.oddsHistory} height={160} color="auto" />
+        ) : (
+          <div className="h-40 flex items-center justify-center text-sm text-ink-400">
+            No price history available for this market yet.
+          </div>
+        )}
       </div>
 
       {/* Outcome probabilities */}
@@ -347,6 +370,67 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
         })}
       </div>
 
+      {/* Order book / Bid-Ask spread (Polymarket only) */}
+      {market.source === 'polymarket' && market.outcomes[0]?.clobTokenId && (
+        <div className="card p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2">
+            <Layers className="h-4 w-4 text-teal-400" />
+            Order Book (Top Outcome)
+          </h3>
+          {orderBookLoading ? (
+            <div className="text-sm text-ink-400">Loading order book…</div>
+          ) : orderBook ? (
+            <div className="space-y-3">
+              {/* Bid/Ask/Spread summary */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center p-2 rounded-lg bg-ink-800/50">
+                  <div className="text-[10px] text-ink-400 mb-0.5">Best Bid</div>
+                  <div className="text-sm font-mono text-success-400">
+                    {orderBook.bestBid !== null ? formatPrice(orderBook.bestBid) : '—'}
+                  </div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-ink-800/50">
+                  <div className="text-[10px] text-ink-400 mb-0.5">Best Ask</div>
+                  <div className="text-sm font-mono text-danger-400">
+                    {orderBook.bestAsk !== null ? formatPrice(orderBook.bestAsk) : '—'}
+                  </div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-ink-800/50">
+                  <div className="text-[10px] text-ink-400 mb-0.5">Spread</div>
+                  <div className="text-sm font-mono text-gray-100">
+                    {orderBook.spread !== null ? formatPrice(orderBook.spread) : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Depth table */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="space-y-1">
+                  <div className="text-ink-400 font-medium pb-1 border-b border-ink-700/40">Bids</div>
+                  {orderBook.bids.slice(0, 5).map((b, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span className="text-success-400 font-mono">{formatPrice(b.price)}</span>
+                      <span className="text-ink-300 font-mono">{formatShares(b.size)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1">
+                  <div className="text-ink-400 font-medium pb-1 border-b border-ink-700/40">Asks</div>
+                  {orderBook.asks.slice(0, 5).map((a, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span className="text-danger-400 font-mono">{formatPrice(a.price)}</span>
+                      <span className="text-ink-300 font-mono">{formatShares(a.size)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-ink-400">Order book unavailable.</div>
+          )}
+        </div>
+      )}
+
       {/* Trade panel */}
       <TradePanel market={market} onNavigateCompare={onNavigateCompare} />
 
@@ -369,29 +453,42 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
         </div>
       </div>
 
-      {/* Recent activity */}
-      <div className="card p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2">
-          <Activity className="h-4 w-4 text-teal-400" />
-          Recent Activity
-        </h3>
-        <div className="space-y-2">
-          {market.recentActivity.slice(0, 8).map(act => (
-            <div key={act.id} className="flex items-center justify-between text-xs py-2 border-b border-ink-700/30 last:border-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`badge ${act.action === 'buy' ? 'bg-success-500/10 text-success-400' : 'bg-danger-500/10 text-danger-400'}`}>
-                  {act.action}
-                </span>
-                <span className="text-gray-200 truncate">{formatShares(act.shares)} @ {formatPrice(act.price)}</span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-ink-400">{act.outcome}</span>
-                <span className="text-ink-500">{timeAgo(act.time)}</span>
-              </div>
-            </div>
-          ))}
+      {/* 24h volume stat */}
+      {market.volume24h > 0 && (
+        <div className="card p-3 flex items-center justify-between">
+          <span className="text-sm text-ink-300 flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-teal-400" />
+            24h Volume
+          </span>
+          <span className="text-sm font-mono text-gray-100">{formatCurrency(market.volume24h, true)}</span>
         </div>
-      </div>
+      )}
+
+      {/* Recent activity (demo markets only have this) */}
+      {market.recentActivity.length > 0 && (
+        <div className="card p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2">
+            <Activity className="h-4 w-4 text-teal-400" />
+            Recent Activity
+          </h3>
+          <div className="space-y-2">
+            {market.recentActivity.slice(0, 8).map(act => (
+              <div key={act.id} className="flex items-center justify-between text-xs py-2 border-b border-ink-700/30 last:border-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`badge ${act.action === 'buy' ? 'bg-success-500/10 text-success-400' : 'bg-danger-500/10 text-danger-400'}`}>
+                    {act.action}
+                  </span>
+                  <span className="text-gray-200 truncate">{formatShares(act.shares)} @ {formatPrice(act.price)}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-ink-400">{act.outcome}</span>
+                  <span className="text-ink-500">{timeAgo(act.time)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Description */}
       <div className="card p-4 space-y-2">
@@ -399,7 +496,7 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
           <Info className="h-4 w-4 text-teal-400" />
           Resolution Criteria
         </h3>
-        <p className="text-sm text-ink-300 leading-relaxed">{market.description}</p>
+        <p className="text-sm text-ink-300 leading-relaxed">{market.description || 'No description available.'}</p>
         <p className="text-xs text-ink-400">{market.resolutionSource}</p>
       </div>
     </div>

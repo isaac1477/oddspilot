@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { GitCompare, X, Plus, Clock, Droplets, BarChart3 } from 'lucide-react';
 import { marketDataService } from '@/services/marketDataService';
 import type { Market } from '@/types';
-import { sampleMarkets } from '@/data/sampleMarkets';
 import { OddsChart } from '@/components/ui/OddsChart';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
+import { SourceBadge } from '@/components/ui/SourceBadge';
 import {
   formatCurrency,
   formatProb,

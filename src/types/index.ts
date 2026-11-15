@@ -1,13 +1,8 @@
-export type MarketCategory =
-  | 'Politics'
-  | 'Crypto'
-  | 'Sports'
-  | 'Economics'
-  | 'Tech'
-  | 'Culture'
-  | 'Geopolitics';
+export type MarketCategory = string;
 
 export type MarketStatus = 'active' | 'closing-soon' | 'resolved';
+
+export type MarketSource = 'polymarket' | 'demo';
 
 export interface MarketOutcome {
   id: string;
@@ -15,11 +10,26 @@ export interface MarketOutcome {
   probability: number;       // 0..1
   price: number;             // 0..1 in USDC terms
   volume24h: number;
+  clobTokenId?: string;
 }
 
 export interface OddsPoint {
   t: number;   // timestamp (ms)
   prob: number; // 0..1
+}
+
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+}
+
+export interface OrderBookData {
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  bestBid: number | null;
+  bestAsk: number | null;
+  spread: number | null;
+  timestamp: number;
 }
 
 export interface MarketActivity {
@@ -41,11 +51,14 @@ export interface Market {
   endsAt: number;
   liquidity: number;
   totalVolume: number;
+  volume24h: number;
   outcomes: MarketOutcome[];
   oddsHistory: OddsPoint[];
   recentActivity: MarketActivity[];
   description: string;
   resolutionSource: string;
+  source: MarketSource;
+  lastUpdated: number;
 }
 
 export type TradeSide = 'buy' | 'sell';
