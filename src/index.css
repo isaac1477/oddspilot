@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    @apply bg-ink-950 text-gray-200 font-sans antialiased;
+  }
+
+  body {
+    @apply bg-ink-950 text-gray-200 font-sans antialiased;
+    overscroll-behavior-y: none;
+    width: 100%;
+  }
+
+  #root {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-600 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-500;
+  }
+}
+
+@layer components {
+  .shimmer-bg {
+    background: linear-gradient(90deg, #111a2e 25%, #1a2740 50%, #111a2e 75%);
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+
+  .card {
+    @apply bg-ink-900 border border-ink-700/60 rounded-2xl;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-ink-600 hover:bg-ink-800/80;
+  }
+
+  .btn-primary {
+    @apply bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-medium rounded-xl
+           px-4 py-2.5 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-ink-700 hover:bg-ink-600 active:bg-ink-800 text-gray-200 font-medium rounded-xl
+           px-4 py-2.5 transition-colors duration-150 disabled:opacity-40;
+  }
+
+  .btn-danger {
+    @apply bg-danger-600/20 hover:bg-danger-600/30 text-danger-400 font-medium rounded-xl
+           px-4 py-2.5 border border-danger-600/30 transition-colors duration-150;
+  }
+
+  .input-field {
+    @apply bg-ink-800 border border-ink-600/60 rounded-xl px-4 py-2.5 text-sm text-gray-100
+           placeholder:text-ink-400 focus:outline-none focus:border-teal-500/50
+           focus:ring-2 focus:ring-teal-500/20 transition-all;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium;
+  }
+
+  .glass {
+    @apply bg-ink-900/80 backdrop-blur-lg;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
