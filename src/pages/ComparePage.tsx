@@ -28,6 +28,7 @@ export function ComparePage({ selectedIds, onNavigate }: ComparePageProps) {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
+  const [availableMarkets, setAvailableMarkets] = useState<Market[]>([]);
 
   useEffect(() => {
     if (ids.length === 0) {
@@ -42,7 +43,12 @@ export function ComparePage({ selectedIds, onNavigate }: ComparePageProps) {
     });
   }, [ids]);
 
-  const availableMarkets = sampleMarkets.filter(m => !ids.includes(m.id));
+  useEffect(() => {
+    if (!showPicker) return;
+    marketDataService.getMarkets({ limit: 30 }).then(result => {
+      setAvailableMarkets(result.markets.filter(m => !ids.includes(m.id)));
+    });
+  }, [showPicker, ids]);
 
   const addMarket = (id: string) => {
     if (ids.length >= MAX_COMPARE) return;
@@ -187,6 +193,10 @@ export function ComparePage({ selectedIds, onNavigate }: ComparePageProps) {
                     <button onClick={() => removeMarket(mkt.id)} className="text-ink-400 hover:text-danger-400 shrink-0">
                       <X className="h-4 w-4" />
                     </button>
+                  </div>
+
+                  <div className="mb-2">
+                    <SourceBadge source={mkt.source} lastUpdated={mkt.lastUpdated} />
                   </div>
 
                   <div className="flex items-baseline gap-2 mb-2">

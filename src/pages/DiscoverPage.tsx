@@ -117,7 +117,7 @@ export function DiscoverPage({ onNavigate }: DiscoverPageProps) {
           </div>
         </div>
         <div className="mt-3">
-          <SourceBadge source={source} lastUpdated={lastUpdated} />
+          <SourceBadge source={source === 'polymarket' ? 'polymarket' : 'demo'} lastUpdated={lastUpdated} />
         </div>
       </div>
 

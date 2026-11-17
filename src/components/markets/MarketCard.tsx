@@ -1,6 +1,7 @@
 import { Clock, Droplets, BarChart3 } from 'lucide-react';
 import type { Market } from '@/types';
 import { formatCurrency, formatProb, timeUntil, probChangeColor, probChangeArrow } from '@/utils/format';
+import { SourceBadge } from '@/components/ui/SourceBadge';
 
 interface MarketCardProps {
   market: Market;
@@ -79,6 +80,9 @@ export function MarketCard({ market, onClick }: MarketCardProps) {
         <span className="flex items-center gap-1">
           <BarChart3 className="h-3 w-3" />
           {formatCurrency(market.totalVolume, true)} vol
+        </span>
+        <span className="ml-auto">
+          <SourceBadge source={market.source} />
         </span>
       </div>
     </button>
