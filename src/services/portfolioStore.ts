@@ -3,6 +3,20 @@ import type { Portfolio, SimTrade, SimPosition, TradeSide } from '@/types';
 const STORAGE_KEY = 'oddspilot_portfolio_v1';
 const DEFAULT_BALANCE = 10_000;
 
+// Simulated fee + slippage accounting scaffold. Fees are hypothetical and do
+// NOT alter execution price (we never invent a fill price — the user-supplied
+// price is used as-is). These fields are prepared for future realistic
+// accounting but currently kept at zero so existing trades are unaffected.
+export interface TradeCosts {
+  feeRate: number;      // fraction of notional, e.g. 0.001 = 0.1%
+  slippageRate: number; // fraction of notional, reserved; not applied to fill price
+}
+
+const DEFAULT_TRADE_COSTS: TradeCosts = {
+  feeRate: 0,
+  slippageRate: 0,
+};
+
 function defaultPortfolio(): Portfolio {
   return {
     cashBalance: DEFAULT_BALANCE,
@@ -11,24 +25,56 @@ function defaultPortfolio(): Portfolio {
   };
 }
 
+function isFiniteNumber(value: number): boolean {
+  return typeof value === 'number' && isFinite(value);
+}
+
+function sanitizePortfolio(parsed: Partial<Portfolio>): Portfolio {
+  const cashBalance = isFiniteNumber(parsed.cashBalance as number)
+    ? (parsed.cashBalance as number)
+    : DEFAULT_BALANCE;
+
+  const positions: SimPosition[] = Array.isArray(parsed.positions)
+    ? parsed.positions.filter(
+        (p): p is SimPosition =>
+          !!p &&
+          isFiniteNumber(p.shares) &&
+          p.shares >= 0 &&
+          isFiniteNumber(p.avgPrice) &&
+          p.avgPrice >= 0,
+      )
+    : [];
+
+  const tradeHistory: SimTrade[] = Array.isArray(parsed.tradeHistory)
+    ? parsed.tradeHistory.filter(
+        (t): t is SimTrade =>
+          !!t &&
+          isFiniteNumber(t.shares) &&
+          isFiniteNumber(t.price) &&
+          isFiniteNumber(t.cost),
+      )
+    : [];
+
+  return { cashBalance, positions, tradeHistory };
+}
+
 function load(): Portfolio {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultPortfolio();
-    const parsed = JSON.parse(raw) as Portfolio;
-    if (typeof parsed.cashBalance !== 'number') return defaultPortfolio();
-    return {
-      cashBalance: parsed.cashBalance,
-      positions: parsed.positions ?? [],
-      tradeHistory: parsed.tradeHistory ?? [],
-    };
+    const parsed = JSON.parse(raw) as Partial<Portfolio>;
+    return sanitizePortfolio(parsed);
   } catch {
     return defaultPortfolio();
   }
 }
 
 function save(portfolio: Portfolio) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(portfolio));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(portfolio));
+  } catch {
+    // Storage may be unavailable (quota / private mode); keep in-memory state.
+  }
 }
 
 function genId(): string {
@@ -37,9 +83,26 @@ function genId(): string {
 
 type Listener = (portfolio: Portfolio) => void;
 
+export interface TradeValidation {
+  ok: boolean;
+  error?: string;
+}
+
+function validateTradeInput(
+  shares: number,
+  price: number,
+): TradeValidation {
+  if (!isFiniteNumber(shares)) return { ok: false, error: 'Share quantity is not a valid number.' };
+  if (!isFiniteNumber(price)) return { ok: false, error: 'Price is not a valid number.' };
+  if (shares <= 0) return { ok: false, error: 'Shares must be greater than zero.' };
+  if (price < 0 || price > 1) return { ok: false, error: 'Price must be between 0 and 1.' };
+  return { ok: true };
+}
+
 class PortfolioStore {
   private portfolio: Portfolio;
   private listeners = new Set<Listener>();
+  private tradeCosts: TradeCosts = { ...DEFAULT_TRADE_COSTS };
 
   constructor() {
     this.portfolio = load();
@@ -47,6 +110,14 @@ class PortfolioStore {
 
   get(): Portfolio {
     return this.portfolio;
+  }
+
+  getTradeCosts(): TradeCosts {
+    return { ...this.tradeCosts };
+  }
+
+  setTradeCosts(costs: Partial<TradeCosts>) {
+    this.tradeCosts = { ...this.tradeCosts, ...costs };
   }
 
   subscribe(listener: Listener): () => void {
@@ -59,6 +130,14 @@ class PortfolioStore {
     this.listeners.forEach(l => l(this.portfolio));
   }
 
+  private notional(shares: number, price: number): number {
+    return shares * price;
+  }
+
+  private feeFor(notional: number): number {
+    return notional * this.tradeCosts.feeRate;
+  }
+
   buy(
     marketId: string,
     marketQuestion: string,
@@ -67,12 +146,15 @@ class PortfolioStore {
     shares: number,
     price: number,
   ): { success: boolean; error?: string; trade?: SimTrade } {
-    const cost = shares * price;
-    if (cost > this.portfolio.cashBalance) {
+    const inputCheck = validateTradeInput(shares, price);
+    if (!inputCheck.ok) return { success: false, error: inputCheck.error };
+
+    const notional = this.notional(shares, price);
+    const fee = this.feeFor(notional);
+    const cost = notional + fee;
+
+    if (cost > this.portfolio.cashBalance + 1e-9) {
       return { success: false, error: 'Insufficient virtual cash for this trade.' };
-    }
-    if (shares <= 0) {
-      return { success: false, error: 'Shares must be greater than zero.' };
     }
 
     this.portfolio.cashBalance -= cost;
@@ -82,7 +164,7 @@ class PortfolioStore {
     );
 
     if (existing) {
-      const totalCost = existing.shares * existing.avgPrice + cost;
+      const totalCost = existing.shares * existing.avgPrice + notional;
       existing.shares += shares;
       existing.avgPrice = totalCost / existing.shares;
     } else {
@@ -124,24 +206,27 @@ class PortfolioStore {
     shares: number,
     price: number,
   ): { success: boolean; error?: string; trade?: SimTrade } {
+    const inputCheck = validateTradeInput(shares, price);
+    if (!inputCheck.ok) return { success: false, error: inputCheck.error };
+
     const position = this.portfolio.positions.find(
       p => p.marketId === marketId && p.outcomeId === outcomeId,
     );
     if (!position) {
       return { success: false, error: 'No open position for this outcome.' };
     }
-    if (shares <= 0) {
-      return { success: false, error: 'Shares must be greater than zero.' };
-    }
-    if (shares > position.shares) {
+    if (shares > position.shares + 1e-9) {
       return { success: false, error: `You only have ${position.shares} shares to sell.` };
     }
 
-    const proceeds = shares * price;
+    const notional = this.notional(shares, price);
+    const fee = this.feeFor(notional);
+    const proceeds = notional - fee;
+
     this.portfolio.cashBalance += proceeds;
     position.shares -= shares;
 
-    if (position.shares <= 0) {
+    if (position.shares <= 1e-9) {
       this.portfolio.positions = this.portfolio.positions.filter(p => p.id !== position.id);
     }
 

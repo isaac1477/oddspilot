@@ -2,7 +2,8 @@ export type MarketCategory = string;
 
 export type MarketStatus = 'active' | 'closing-soon' | 'resolved';
 
-export type MarketSource = 'polymarket' | 'demo';
+// `predict` is reserved for a future integration and not yet implemented.
+export type MarketSource = 'polymarket' | 'demo' | 'mixed' | 'predict';
 
 export interface MarketOutcome {
   id: string;
@@ -54,6 +55,7 @@ export interface Market {
   volume24h: number;
   outcomes: MarketOutcome[];
   oddsHistory: OddsPoint[];
+  oddsHistoryEstimated?: boolean;
   recentActivity: MarketActivity[];
   description: string;
   resolutionSource: string;

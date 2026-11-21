@@ -99,7 +99,8 @@ export function DiscoverPage({ onNavigate }: DiscoverPageProps) {
     setSortBy('volume');
   };
 
-  const isDemo = source === 'demo' || source === 'mixed';
+  const isDemo = source === 'demo';
+  const isMixed = source === 'mixed';
 
   return (
     <div className="px-4 pt-4 pb-6 space-y-4">
@@ -117,7 +118,7 @@ export function DiscoverPage({ onNavigate }: DiscoverPageProps) {
           </div>
         </div>
         <div className="mt-3">
-          <SourceBadge source={source === 'polymarket' ? 'polymarket' : 'demo'} lastUpdated={lastUpdated} />
+          <SourceBadge source={source} lastUpdated={lastUpdated} />
         </div>
       </div>
 
@@ -165,6 +166,9 @@ export function DiscoverPage({ onNavigate }: DiscoverPageProps) {
           {loading ? 'Loading…' : `${markets.length} market${markets.length !== 1 ? 's' : ''}`}
           {isDemo && !loading && (
             <span className="text-gold-400/80 ml-1.5">(demo fallback)</span>
+          )}
+          {isMixed && !loading && (
+            <span className="text-gold-400/80 ml-1.5">(mixed sources)</span>
           )}
         </span>
         <div className="flex items-center gap-2">

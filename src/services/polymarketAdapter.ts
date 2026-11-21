@@ -4,6 +4,7 @@ const GAMMA_API = 'https://gamma-api.polymarket.com';
 const CLOB_API = 'https://clob.polymarket.com';
 const TIMEOUT_MS = 8000;
 const MAX_RETRIES = 2;
+const MAX_PAGE = 500;
 
 async function fetchWithTimeout(url: string, retries = MAX_RETRIES): Promise<Response> {
   let lastError: Error = new Error('Request failed');
@@ -47,6 +48,10 @@ function toNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function isLikelyNumericId(id: string): boolean {
+  return /^\d+$/.test(id);
+}
+
 function parseDate(value: unknown): number {
   if (typeof value !== 'string') return 0;
   const ms = Date.parse(value);
@@ -62,6 +67,7 @@ interface GammaMarket {
   outcomePrices?: string;
   clobTokenIds?: string;
   volumeNum?: number;
+  liquidity?: string | number;
   liquidityNum?: number;
   volume24hr?: number;
   endDate?: string;
@@ -152,8 +158,13 @@ function normalizeGammaMarket(gm: GammaMarket): Market | null {
 
   const endsAt = parseDate(gm.endDate);
   const oddsHistory: OddsPoint[] = [];
+  let oddsHistoryEstimated = false;
 
+  // Synthetic 2-point estimate derived from last trade + 24h change. This is
+  // NOT verified historical trade data — marked as estimated so the UI can
+  // label it honestly. Real CLOB history (when available) replaces this.
   if (gm.lastTradePrice !== undefined && outcomes.length > 0) {
+    oddsHistoryEstimated = true;
     oddsHistory.push({
       t: Date.now() - 24 * 60 * 60 * 1000,
       prob: Math.max(0, Math.min(1, gm.lastTradePrice - toNumber(gm.oneDayPriceChange, 0))),
@@ -173,11 +184,12 @@ function normalizeGammaMarket(gm: GammaMarket): Market | null {
     category,
     status: mapStatus(gm),
     endsAt,
-    liquidity: toNumber(gm.liquidityNum ?? gm.liquidityNum, 0),
+    liquidity: toNumber(gm.liquidityNum ?? gm.liquidity, 0),
     totalVolume: toNumber(gm.volumeNum ?? gm.volumeNum, 0),
     volume24h: toNumber(gm.volume24hr, 0),
     outcomes,
     oddsHistory,
+    oddsHistoryEstimated,
     recentActivity: [],
     description: gm.description || '',
     resolutionSource: gm.events?.[0]?.title || 'Polymarket — UMA oracle resolution',
@@ -190,41 +202,70 @@ export interface PolymarketMarketsResult {
   markets: Market[];
   total: number;
   hasMore: boolean;
+  source: 'polymarket';
 }
 
 export const polymarketAdapter = {
   async getMarkets(offset = 0, limit = 50): Promise<PolymarketMarketsResult> {
-    const url = `${GAMMA_API}/markets?active=true&closed=false&limit=${limit}&offset=${offset}&order=volumeNum&ascending=false`;
+    const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE);
+    const safeOffset = Math.max(0, offset);
+    const url = `${GAMMA_API}/markets?active=true&closed=false&limit=${safeLimit}&offset=${safeOffset}&order=volumeNum&ascending=false`;
     const res = await fetchWithTimeout(url);
-    const data = await res.json() as GammaMarket[];
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error('Unexpected Gamma API response (not an array)');
+    }
     const markets: Market[] = [];
     for (const gm of data) {
       const market = normalizeGammaMarket(gm);
       if (market) markets.push(market);
     }
+    const hasMore = data.length === safeLimit;
     return {
       markets,
       total: markets.length,
-      hasMore: data.length === limit,
+      hasMore,
+      source: 'polymarket' as const,
     };
   },
 
   async getMarketById(id: string): Promise<Market | null> {
-    const url = `${GAMMA_API}/markets?slug=${encodeURIComponent(id)}`;
-    const res = await fetchWithTimeout(url);
-    const data = await res.json() as GammaMarket[];
-    if (data.length === 0) {
-      const urlById = `${GAMMA_API}/markets/${encodeURIComponent(id)}`;
-      const resById = await fetchWithTimeout(urlById);
-      const gm = await resById.json() as GammaMarket;
-      return normalizeGammaMarket(gm);
+    if (!id) return null;
+
+    // Numeric id: Gamma exposes /markets/{id} directly.
+    if (isLikelyNumericId(id)) {
+      try {
+        const res = await fetchWithTimeout(`${GAMMA_API}/markets/${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const gm = await res.json() as GammaMarket;
+          const market = normalizeGammaMarket(gm);
+          if (market) return market;
+        }
+      } catch {
+        // fall through to slug lookup
+      }
     }
-    return normalizeGammaMarket(data[0]);
+
+    // Slug lookup (also covers cases where a slug was passed as the id).
+    try {
+      const url = `${GAMMA_API}/markets?slug=${encodeURIComponent(id)}`;
+      const res = await fetchWithTimeout(url);
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return normalizeGammaMarket(data[0]);
+      }
+    } catch {
+      // fall through
+    }
+
+    return null;
   },
 
   async getMarketByIds(ids: string[]): Promise<Market[]> {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return [];
     const results = await Promise.allSettled(
-      ids.map(id => this.getMarketById(id)),
+      unique.map(id => this.getMarketById(id)),
     );
     const markets: Market[] = [];
     for (const result of results) {
