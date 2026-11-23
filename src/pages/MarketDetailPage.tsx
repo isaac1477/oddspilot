@@ -293,6 +293,21 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
 
   const topOutcome = [...market.outcomes].sort((a, b) => b.probability - a.probability)[0];
 
+if (!topOutcome) {
+  return (
+    <div className="px-4 pt-4">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-sm text-ink-300 hover:text-gray-200 mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back to markets
+      </button>
+      <div className="card p-4 text-sm text-ink-300">
+        No outcomes are available for this market.
+      </div>
+    </div>
+  );
+}
   return (
     <div className="px-4 pt-4 pb-6 space-y-4">
       {/* Back */}
