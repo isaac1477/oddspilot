@@ -36,18 +36,22 @@ export function ComparePage({ selectedIds, onNavigate }: ComparePageProps) {
       setLoading(false);
       return;
     }
+    let cancelled = false;
     setLoading(true);
-    marketDataService.getMarketByIds(ids).then(ms => {
-      setMarkets(ms);
-      setLoading(false);
-    });
+    marketDataService.getMarketByIds(ids)
+      .then(ms => { if (!cancelled) setMarkets(ms); })
+      .catch(() => { if (!cancelled) setMarkets([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [ids]);
 
   useEffect(() => {
     if (!showPicker) return;
-    marketDataService.getMarkets({ limit: 30 }).then(result => {
-      setAvailableMarkets(result.markets.filter(m => !ids.includes(m.id)));
-    });
+    let cancelled = false;
+    marketDataService.getMarkets({ limit: 30 })
+      .then(result => { if (!cancelled) setAvailableMarkets(result.markets.filter(m => !ids.includes(m.id))); })
+      .catch(() => { if (!cancelled) setAvailableMarkets([]); });
+    return () => { cancelled = true; };
   }, [showPicker, ids]);
 
   const addMarket = (id: string) => {
@@ -89,7 +93,7 @@ export function ComparePage({ selectedIds, onNavigate }: ComparePageProps) {
               ))}
               {markets.map((mkt, idx) => {
                 const color = chartColors[idx % chartColors.length];
-                const history = mkt.oddsHistory;
+                const history = mkt.oddsHistory ?? [];
                 if (history.length < 2) return null;
                 const path = history.map((p, i) => {
                   const x = (i / (history.length - 1)) * 100;
@@ -173,7 +177,7 @@ export function ComparePage({ selectedIds, onNavigate }: ComparePageProps) {
           {/* Comparison cards */}
           <div className="space-y-3">
             {markets.map((mkt, idx) => {
-              const change = mkt.oddsHistory.length >= 2
+              const change = mkt.oddsHistory && mkt.oddsHistory.length >= 2
                 ? mkt.oddsHistory[mkt.oddsHistory.length - 1].prob - mkt.oddsHistory[0].prob
                 : 0;
               const topOutcome = [...mkt.outcomes].sort((a, b) => b.probability - a.probability)[0];
@@ -209,7 +213,7 @@ export function ComparePage({ selectedIds, onNavigate }: ComparePageProps) {
                     </span>
                   </div>
 
-                  <OddsChart data={mkt.oddsHistory} height={100} color={chartColors[idx % chartColors.length]} showAxis={false} />
+                  <OddsChart data={mkt.oddsHistory ?? []} height={100} color={chartColors[idx % chartColors.length]} showAxis={false} />
 
                   <div className="grid grid-cols-3 gap-2 mt-3 text-xs min-w-0">
                     <div className="min-w-0">

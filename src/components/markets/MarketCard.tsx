@@ -9,7 +9,7 @@ interface MarketCardProps {
 }
 
 export function MarketCard({ market, onClick }: MarketCardProps) {
-  const history = market.oddsHistory;
+  const history = market.oddsHistory ?? [];
   const change = history.length >= 2 ? history[history.length - 1].prob - history[0].prob : 0;
 
   const statusStyles =
@@ -18,6 +18,8 @@ export function MarketCard({ market, onClick }: MarketCardProps) {
       : 'bg-teal-600/10 text-teal-400 border border-teal-600/20';
 
   const statusLabel = market.status === 'closing-soon' ? 'Closing soon' : 'Active';
+
+  if (!market.outcomes || market.outcomes.length === 0) return null;
 
   const topOutcome = [...market.outcomes].sort((a, b) => b.probability - a.probability)[0];
 
@@ -57,11 +59,11 @@ export function MarketCard({ market, onClick }: MarketCardProps) {
         {/* Mini sparkline */}
         <svg viewBox="0 0 60 28" className="w-16 h-8 shrink-0" preserveAspectRatio="none">
           <polyline
-            points={history.map((p, i) => {
+            points={history.length >= 2 ? history.map((p, i) => {
               const x = (i / (history.length - 1)) * 60;
               const y = 28 - p.prob * 28;
               return `${x},${y}`;
-            }).join(' ')}
+            }).join(' ') : ''}
             fill="none"
             stroke={change >= 0 ? '#34d399' : '#f87171'}
             strokeWidth="1.5"

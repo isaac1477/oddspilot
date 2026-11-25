@@ -32,7 +32,8 @@ export function TradePanel({ market, onNavigateCompare }: TradePanelProps) {
   const [shareInput, setShareInput] = useState('100');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  const shares = parseFloat(shareInput) || 0;
+  const parsed = parseFloat(shareInput);
+  const shares = isFinite(parsed) && parsed > 0 ? parsed : 0;
   const price = selectedOutcome.price;
   const total = shares * price;
 
@@ -40,7 +41,7 @@ export function TradePanel({ market, onNavigateCompare }: TradePanelProps) {
     p => p.marketId === market.id && p.outcomeId === selectedOutcome.id,
   );
 
-  const maxAffordable = Math.floor(portfolio.cashBalance / price);
+  const maxAffordable = price > 0 ? Math.floor(portfolio.cashBalance / price) : 0;
   const maxSellable = existingPosition?.shares ?? 0;
 
   const handleTrade = () => {
@@ -175,7 +176,7 @@ export function TradePanel({ market, onNavigateCompare }: TradePanelProps) {
       <div className="space-y-1.5 px-3 py-3 rounded-xl bg-ink-950/50 border border-ink-700/40">
         <div className="flex justify-between text-sm">
           <span className="text-ink-300">Price per share</span>
-          <span className="text-gray-100 font-mono">{formatPrice(price)}</span>
+          <span className="text-gray-100 font-mono">{formatPrice(price)} (${price.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')})</span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-ink-300">Shares</span>
@@ -203,7 +204,7 @@ export function TradePanel({ market, onNavigateCompare }: TradePanelProps) {
       {/* Action */}
       <button
         onClick={handleTrade}
-        disabled={shares <= 0 || (side === 'buy' && total > portfolio.cashBalance) || (side === 'sell' && shares > maxSellable)}
+        disabled={shares <= 0 || (side === 'buy' && total > portfolio.cashBalance + 1e-9) || (side === 'sell' && shares > maxSellable)}
         className={side === 'buy' ? 'btn-primary w-full' : 'btn-danger w-full'}
       >
         {side === 'buy'
@@ -211,7 +212,7 @@ export function TradePanel({ market, onNavigateCompare }: TradePanelProps) {
           : `Sell ${formatShares(shares)} "${selectedOutcome.label}"`}
       </button>
       <p className="text-[11px] text-ink-400 text-center break-words">
-        Virtual money only. No real funds or transactions involved.
+        Prices are quoted in cents per share (100¢ = $1.00). Virtual money only — no real funds or transactions involved.
       </p>
     </div>
   );
@@ -281,6 +282,17 @@ export function MarketDetailPage({ marketId, onBack, onNavigateCompare }: Market
   }
 
   if (error || !market) {
+    return (
+      <div className="px-4 pt-4">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-ink-300 hover:text-gray-200 mb-4">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+        <ErrorState onRetry={fetchMarket} />
+      </div>
+    );
+  }
+
+  if (!market.outcomes || market.outcomes.length === 0) {
     return (
       <div className="px-4 pt-4">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-ink-300 hover:text-gray-200 mb-4">

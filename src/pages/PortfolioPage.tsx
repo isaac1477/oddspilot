@@ -28,6 +28,7 @@ export function PortfolioPage({ onNavigate }: PortfolioPageProps) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const ids = [...new Set(portfolio.positions.map(p => p.marketId))];
     if (ids.length === 0) {
       setMarkets([]);
@@ -35,11 +36,12 @@ export function PortfolioPage({ onNavigate }: PortfolioPageProps) {
       return;
     }
     setLoading(true);
-    marketDataService.getMarketByIds(ids).then(ms => {
-      setMarkets(ms);
-      setLoading(false);
-    });
-  }, [portfolio.positions.length]);
+    marketDataService.getMarketByIds(ids)
+      .then(ms => { if (!cancelled) setMarkets(ms); })
+      .catch(() => { if (!cancelled) setMarkets([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [portfolio.positions]);
 
   const positionsWithCurrent = useMemo(() => {
     return portfolio.positions.map(pos => {
@@ -116,6 +118,12 @@ export function PortfolioPage({ onNavigate }: PortfolioPageProps) {
               </button>
             }
           />
+        ) : positionsWithCurrent.length === 0 ? (
+          <EmptyState
+            icon={<TrendingUp className="h-6 w-6 text-ink-400" />}
+            title="Positions unavailable"
+            message="Market data for your saved positions could not be loaded. They are still held — try refreshing."
+          />
         ) : (
           <div className="space-y-2">
             {positionsWithCurrent.map(({ position, currentPrice, currentValue, costBasis, pnl, pnlPct }) => (
@@ -171,9 +179,9 @@ export function PortfolioPage({ onNavigate }: PortfolioPageProps) {
                 </div>
                 <div className="text-right shrink-0 ml-2">
                   <div className="text-sm font-medium text-gray-100 tabular-nums">
-                    {formatCurrency(trade.cost)}
+                    {formatPrice(trade.price)} × {formatShares(trade.shares)}
                   </div>
-                  <div className="text-xs text-ink-400">{timeAgo(trade.timestamp)}</div>
+                  <div className="text-xs text-ink-400 tabular-nums">{formatCurrency(trade.cost)} · {timeAgo(trade.timestamp)}</div>
                 </div>
               </div>
             ))}
