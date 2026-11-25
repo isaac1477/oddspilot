@@ -231,7 +231,7 @@ export function DiscoverPage({ onNavigate }: DiscoverPageProps) {
               <MarketCard
                 key={market.id}
                 market={market}
-                onClick={() => onNavigate({ name: 'market-detail', id: market.slug || market.id })}
+                onClick={() => onNavigate({ name: 'market-detail', id: market.id })}
               />
             ))}
           </div>

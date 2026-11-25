@@ -1,4 +1,5 @@
 export function formatCurrency(value: number, compact = false): string {
+  if (!isFinite(value)) return '—';
   if (compact && Math.abs(value) >= 1_000_000) {
     return `$${(value / 1_000_000).toFixed(1)}M`;
   }
@@ -18,7 +19,11 @@ export function formatProb(prob: number): string {
 }
 
 export function formatPrice(price: number): string {
-  return `${(price * 100).toFixed(0)}¢`;
+  if (!isFinite(price)) return '—';
+  // Keep fractional cents (e.g. 5.5¢) so the per-share price matches the
+  // dollar totals shown in the trade summary and history.
+  const cents = Math.round(price * 100 * 10) / 10;
+  return `${Number.isInteger(cents) ? cents.toFixed(0) : cents.toFixed(1)}¢`;
 }
 
 export function formatShares(shares: number): string {
